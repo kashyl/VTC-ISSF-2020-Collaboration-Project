@@ -11,6 +11,7 @@ import json  # support for JSON files
 import urllib  # converts strings to url format (needed in case of special characters)
 import urllib.parse
 import pymongo as pymongo  # for MongoDB support
+import sys
 
 """Get environment variables"""
 dbUser = os.environ['DB_USER']
@@ -32,7 +33,8 @@ async def regional_weather_data():
     while True:  # so the loop continues after one run; use this as long as async call is performed inside
 
         location = "Hong Kong"  # Used for the API call below
-        sleep_timer = 15  # Sets the amount of seconds between each loop, minimum 1 (or the API will refuse requests)
+        wait_timer = 420  # Sets the amount of seconds between each loop, minimum 1 (or the API will refuse requests)
+        loop_timer = 5  # Amount of seconds to wait after new data is stored
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f'http://api.openweathermap.org/data/2.5/weather?q={location}&APPID={weatherKey}') \
@@ -83,8 +85,17 @@ async def regional_weather_data():
                     last_temperature = last_doc[0]['temperature']
 
                     if last_temperature == celsius:
-                        print('Waiting for new API data...')
-                        await asyncio.sleep(sleep_timer)
+                        # print('Waiting for new API data...', end=" ")
+                        # await asyncio.sleep(wait_timer)
+                        """Print countdown of seconds left until next API call"""
+                        for remaining in range(wait_timer, 0, -1):
+                            sys.stdout.write("\r")  # print on same line (https://en.wikipedia.org/wiki/Carriage_return)
+                            sys.stdout.write("Waiting for new API data: {:2d} second(s) until refresh."
+                                             .format(remaining))
+                            sys.stdout.flush()  # forces buffer "flush" so print statement is immediately executed
+                            await asyncio.sleep(1)
+                        sys.stdout.write("\r")
+                        # print(f'Waited {wait_timer} second(s). {location} time: {location_time}')
                         continue
                 except IndexError:
                     pass
@@ -128,7 +139,7 @@ async def regional_weather_data():
                 print('Stored regional data', end=": ")
                 print(f'{weather_resp["name"]} @ {location_datetime} '
                       f'({celsius}°C, {weather_resp["weather"][0]["description"]})')
-        await asyncio.sleep(sleep_timer)
+        await asyncio.sleep(loop_timer)
 
 
 """Start of asyncio event loop"""
