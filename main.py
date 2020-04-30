@@ -24,7 +24,6 @@ weatherKey = os.environ['WEATHER_API_KEY']  # Fetch OpenWeatherMap API key from 
 client = pymongo.MongoClient(f'mongodb+srv://{dbUser}:{dbPassURL}'
                              f'@issf2020hk-la5xb.gcp.mongodb.net/test?retryWrites=true&w=majority')
 db = client['mydb']
-users_col = db['users']
 weather_col = db['regional_weather']
 
 
@@ -34,7 +33,7 @@ async def regional_weather_data():
 
         location = "Hong Kong"  # Used for the API call below
         wait_timer = 420  # Sets the amount of seconds between each loop, minimum 1 (or the API will refuse requests)
-        loop_timer = 5  # Amount of seconds to wait after new data is stored
+        loop_timer = 1  # Amount of seconds to wait after new data is stored
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f'http://api.openweathermap.org/data/2.5/weather?q={location}&APPID={weatherKey}') \
@@ -112,11 +111,20 @@ async def regional_weather_data():
                     {  # filter: A query that matches the document to update.
                         'location': weather_data['location'],  # make sure the data is in the same location/city
                         'date': weather_data['date'],          # and the same day
-                        'records': {'$lt': 100}  # maximum record count (filter: records less than 100)
+                        'records': {'$lt': 1440}  # maximum record count (filter: records less than X)
                     },
                     {  # update: The modifications to apply.
                         '$set': {'temperature': celsius,  # updates the most important bits
-                                 'last_update': location_time},
+                                 'last_update': location_time,
+                                 'description': weather_resp['weather'][0]['description'],
+                                 'humidity': weather_resp['main']['humidity'],
+                                 'details': {
+                                     'temp_feels_like': round(
+                                         weather_resp['main']['feels_like'] - 273.15, 2),
+                                     'temp_min': round(weather_resp['main']['temp_min'] - 273.15, 2),
+                                     'temp_max': round(weather_resp['main']['temp_max'] - 273.15, 2)
+                                    }
+                                 },
                         '$push': {  # pushes the info in the history array (with all the other data from the same day)
                             'history': {
                                 'time': location_time,
